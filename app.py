@@ -1,534 +1,1232 @@
 """
-FitFuzzy - Clean Light Theme
-Professional, readable, modern
+FitFuzzy - Explainable AI Workout Intensity Prescription Engine
+Powered by Sugeno Fuzzy Inference System (FIS)
 """
 
 import streamlit as st
 from datetime import datetime
-from fitfuzzy_core import build_fitfuzzy_engine, interpret_intensity, get_intensity_color
+import json
+from fitfuzzy_core import (
+    build_fitfuzzy_engine,
+    interpret_intensity,
+    get_intensity_color,
+    get_rpe_target,
+    get_hr_zone
+)
 
+# ── PAGE CONFIGURATION ──────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="FitFuzzy | Smart Workout Planner",
+    page_title="FitFuzzy | Explainable AI Workout Planner",
+    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
+# ── GLOBAL CUSTOM CSS & DESIGN SYSTEM ──────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+:root {
+    --primary: #4F46E5;
+    --primary-light: #EEF2FF;
+    --primary-glow: rgba(79, 70, 229, 0.25);
+    --surface: #FFFFFF;
+    --background: #F8FAFC;
+    --border: #E2E8F0;
+    --border-subtle: #F1F5F9;
+    --text-main: #0F172A;
+    --text-muted: #64748B;
+    --text-light: #94A3B8;
+}
 
 html, body, [class*="css"], .stApp {
-    font-family: 'Inter', sans-serif !important;
-    background-color: #F8FAFC !important;
-    color: #1E293B !important;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    background-color: var(--background) !important;
+    color: var(--text-main) !important;
+    letter-spacing: -0.01em;
 }
 
 #MainMenu, footer, header { visibility: hidden !important; }
-.block-container { padding: 1.5rem 2rem 3rem 2rem !important; max-width: 1300px !important; }
+.block-container {
+    padding-top: 1.2rem !important;
+    padding-bottom: 4rem !important;
+    max-width: 1360px !important;
+}
 
-/* ── NAVBAR ── */
-.navbar {
-    background: white;
-    border-bottom: 2px solid #E2E8F0;
-    padding: 1rem 0;
-    margin-bottom: 2rem;
+/* ── MODERN NAVBAR ── */
+.navbar-container {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    padding: 0.9rem 1.6rem;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.04);
 }
-.nav-logo { font-size: 1.6rem; font-weight: 900; color: #4F46E5; letter-spacing: -1px; }
-.nav-sub  { font-size: 0.75rem; color: #94A3B8; font-weight: 500; }
-.nav-pill {
-    background: #EEF2FF; color: #4F46E5;
-    padding: 0.3rem 0.9rem; border-radius: 999px;
-    font-size: 0.75rem; font-weight: 700;
+.brand-group {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+}
+.brand-icon-box {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 800;
+    font-size: 1.25rem;
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+}
+.brand-title {
+    font-size: 1.4rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    background: linear-gradient(135deg, #0F172A 30%, #4F46E5 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    line-height: 1.1;
+}
+.brand-subtitle {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+.nav-badges {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+.badge-pill {
+    padding: 0.32rem 0.85rem;
+    border-radius: 9999px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    transition: all 0.2s ease;
+}
+.badge-pill-purple {
+    background: #EEF2FF;
+    color: #4F46E5;
     border: 1px solid #C7D2FE;
 }
+.badge-pill-emerald {
+    background: #ECFDF5;
+    color: #059669;
+    border: 1px solid #A7F3D0;
+}
 
-/* ── HERO ── */
-.hero {
-    background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
-    border-radius: 20px;
-    padding: 2.5rem 3rem;
-    margin-bottom: 2rem;
+/* ── HERO BANNER ── */
+.hero-card {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, #0F172A 0%, #1E1B4B 60%, #312E81 100%);
+    border-radius: 22px;
+    padding: 2.4rem 2.8rem;
+    margin-bottom: 1.8rem;
     color: white;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 40px -15px rgba(15, 23, 42, 0.35);
 }
-.hero h1 {
-    font-size: 2.5rem; font-weight: 900;
-    letter-spacing: -1.5px; line-height: 1.1;
-    color: white; margin-bottom: 0.6rem;
+.hero-card::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -20%;
+    width: 480px;
+    height: 480px;
+    background: radial-gradient(circle, rgba(124, 58, 237, 0.25) 0%, rgba(79, 70, 229, 0) 70%);
+    pointer-events: none;
 }
-.hero p { font-size: 1rem; opacity: 0.85; line-height: 1.6; max-width: 580px; margin-bottom: 1.5rem; }
-.hero-stats { display: flex; gap: 2.5rem; flex-wrap: wrap; }
-.hs-num { font-size: 2rem; font-weight: 900; color: white; }
-.hs-lbl { font-size: 0.7rem; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; }
-
-/* ── CARDS ── */
-.card {
-    background: white;
-    border: 1px solid #E2E8F0;
-    border-radius: 16px;
-    padding: 1.8rem;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-}
-
-/* ── SECTION LABEL ── */
-.sec-label {
-    font-size: 0.7rem; font-weight: 700;
-    letter-spacing: 0.15em; text-transform: uppercase;
-    color: #4F46E5; margin-bottom: 0.5rem;
-}
-
-/* ── SLIDERS ── */
-div[data-testid="stSlider"] label {
-    font-size: 0.88rem !important;
-    font-weight: 600 !important;
-    color: #374151 !important;
-}
-.stSlider [data-baseweb="slider"] > div > div {
-    background: linear-gradient(90deg, #4F46E5, #7C3AED) !important;
-}
-
-/* ── SELECTBOX ── */
-.stSelectbox label { font-size: 0.88rem !important; font-weight: 600 !important; color: #374151 !important; }
-div[data-baseweb="select"] > div {
-    border-color: #E2E8F0 !important;
-    border-radius: 10px !important;
-    background: white !important;
-}
-
-/* ── BUTTON ── */
-.stButton > button {
-    background: linear-gradient(135deg, #4F46E5, #7C3AED) !important;
-    color: white !important;
-    border: none !important;
-    border-radius: 12px !important;
-    padding: 0.75rem 2rem !important;
-    font-size: 0.95rem !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.05em !important;
-    width: 100% !important;
-    box-shadow: 0 4px 15px rgba(79,70,229,0.3) !important;
-    text-transform: uppercase !important;
-}
-.stButton > button:hover {
-    transform: translateY(-1px) !important;
-    box-shadow: 0 8px 25px rgba(79,70,229,0.4) !important;
-}
-
-/* ── RESULT ── */
-.result-hero {
-    border-radius: 16px;
-    padding: 2rem;
-    text-align: center;
-    margin-bottom: 1rem;
-    border: 1px solid #E2E8F0;
-    background: white;
-}
-.big-score { font-size: 5rem; font-weight: 900; letter-spacing: -3px; line-height: 1; }
-.score-denom { font-size: 1.3rem; color: #94A3B8; font-weight: 400; }
-.workout-name { font-size: 1.8rem; font-weight: 800; letter-spacing: -0.5px; margin: 0.3rem 0; }
-.workout-desc { font-size: 0.9rem; color: #64748B; line-height: 1.5; margin-bottom: 1rem; }
-.duration-badge {
-    display: inline-block;
-    padding: 0.4rem 1.2rem;
+.hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(8px);
+    padding: 0.3rem 0.8rem;
     border-radius: 999px;
-    font-size: 0.85rem; font-weight: 700;
-    border: 2px solid;
+    font-size: 0.73rem;
+    font-weight: 700;
+    color: #A5B4FC;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.9rem;
+}
+.hero-title {
+    font-size: 2.4rem;
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    line-height: 1.15;
+    margin-bottom: 0.75rem;
+    color: #FFFFFF;
+}
+.hero-desc {
+    font-size: 0.98rem;
+    color: #CBD5E1;
+    line-height: 1.6;
+    max-width: 680px;
+    margin-bottom: 1.8rem;
+}
+.hero-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 1.2rem;
+    max-width: 650px;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    padding-top: 1.4rem;
+}
+.h-stat-num {
+    font-size: 1.65rem;
+    font-weight: 800;
+    color: #FFFFFF;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+}
+.h-stat-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #94A3B8;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 0.25rem;
 }
 
-/* ── GAUGE ── */
-.gauge-wrap {
-    background: #F1F5F9; border-radius: 12px;
-    padding: 1rem 1.2rem; margin: 1rem 0;
+/* ── PRESETS BAR ── */
+.preset-bar-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.4rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
 }
-.gauge-labels {
-    display: flex; justify-content: space-between;
-    font-size: 0.65rem; color: #94A3B8;
-    text-transform: uppercase; letter-spacing: 0.06em;
-    font-weight: 600; margin-bottom: 0.5rem;
+
+/* ── GLASS & CARDS ── */
+.app-card {
+    background: #FFFFFF;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 1.6rem;
+    box-shadow: 0 4px 15px -3px rgba(15, 23, 42, 0.03), 0 2px 6px -2px rgba(15, 23, 42, 0.02);
+    margin-bottom: 1.4rem;
 }
-.gauge-bg { background: #E2E8F0; border-radius: 999px; height: 10px; overflow: hidden; }
-.gauge-fg { height: 100%; border-radius: 999px; }
+.card-header-group {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.2rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-subtle);
+}
+.card-heading {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+}
+.card-tag {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    background: #F1F5F9;
+    color: var(--text-muted);
+}
 
-/* ── METRICS ── */
-.metrics-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.8rem; margin: 1rem 0; }
-.metric { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 0.8rem; text-align: center; }
-.metric-n { font-size: 1.4rem; font-weight: 800; color: #4F46E5; }
-.metric-l { font-size: 0.65rem; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; margin-top: 2px; }
+/* ── LIVE SNAPSHOT HUD ── */
+.hud-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.65rem;
+    margin-top: 1.2rem;
+}
+.hud-item {
+    background: #F8FAFC;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0.65rem 0.8rem;
+    text-align: center;
+}
+.hud-val {
+    font-size: 1.15rem;
+    font-weight: 800;
+    line-height: 1.1;
+    font-family: 'JetBrains Mono', monospace;
+}
+.hud-lbl {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: var(--text-light);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 0.2rem;
+}
 
-/* ── EXPANDERS ── */
-details summary {
-    background: #F8FAFC !important;
-    border: 1px solid #E2E8F0 !important;
-    border-radius: 10px !important;
-    padding: 0.7rem 1rem !important;
-    font-weight: 600 !important;
-    color: #374151 !important;
-    font-size: 0.88rem !important;
+/* ── RESULT HERO CARD ── */
+.result-box {
+    background: #FFFFFF;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 2.2rem 2rem;
+    text-align: center;
+    box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.06);
+    position: relative;
+    overflow: hidden;
+}
+.result-top-badge {
+    display: inline-block;
+    padding: 0.35rem 1rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 1.2rem;
+}
+.score-circle-container {
+    position: relative;
+    width: 170px;
+    height: 170px;
+    margin: 0 auto 1.4rem auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    box-shadow: 0 12px 35px -10px var(--primary-glow);
+}
+.score-number {
+    font-size: 4.2rem;
+    font-weight: 900;
+    letter-spacing: -0.04em;
+    line-height: 0.95;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.score-denominator {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-light);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+.rec-title {
+    font-size: 1.85rem;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    margin: 0.4rem 0 0.6rem 0;
+}
+.rec-desc {
+    font-size: 0.92rem;
+    color: var(--text-muted);
+    line-height: 1.6;
+    max-width: 520px;
+    margin: 0 auto 1.5rem auto;
+}
+
+/* ── PROGRESS GAUGE ── */
+.gauge-track {
+    background: #E2E8F0;
+    border-radius: 999px;
+    height: 10px;
+    overflow: hidden;
+    margin: 1.2rem 0 0.5rem 0;
+}
+.gauge-fill {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.gauge-markers {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: var(--text-light);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 1.2rem;
+}
+
+/* ── 4-METRICS MATRIX ── */
+.metrics-4-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.8rem;
+    margin: 1.4rem 0;
+    text-align: left;
+}
+.m4-card {
+    background: #F8FAFC;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0.9rem 1rem;
+}
+.m4-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--text-light);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.m4-value {
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: var(--text-main);
+    margin-top: 0.25rem;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+/* ── PROTOCOL DIRECTIVES ── */
+.directives-card {
+    background: #FFFFFF;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 1.5rem;
+    margin-top: 1.2rem;
+    box-shadow: 0 4px 15px -3px rgba(15, 23, 42, 0.03);
+}
+.directive-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    background: #F8FAFC;
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.6rem;
+    font-size: 0.88rem;
+    color: #1E293B;
+    line-height: 1.5;
+    transition: transform 0.15s ease;
+}
+.directive-row:hover {
+    transform: translateX(3px);
+    border-color: #CBD5E1;
+}
+.directive-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #EEF2FF;
+    color: #4F46E5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 800;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+}
+
+/* ── EXPLAINABLE AI BARS ── */
+.fuzzy-var-block {
+    background: #FFFFFF;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.2rem;
+    margin-bottom: 1rem;
+}
+.fuzzy-var-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-main);
+    margin-bottom: 0.8rem;
+}
+.mf-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 0.45rem 0;
+}
+.mf-label {
+    width: 85px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: capitalize;
+    flex-shrink: 0;
+}
+.mf-track {
+    flex: 1;
+    background: #F1F5F9;
+    height: 8px;
+    border-radius: 999px;
+    overflow: hidden;
+}
+.mf-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #4F46E5, #06B6D4);
+}
+.mf-val {
+    width: 48px;
+    text-align: right;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #4F46E5;
+    font-family: 'JetBrains Mono', monospace;
+    flex-shrink: 0;
 }
 
 /* ── RULE CARDS ── */
-.rule-on {
-    background: #F0FDF4; border: 1px solid #BBF7D0;
-    border-left: 4px solid #22C55E;
-    border-radius: 10px; padding: 0.75rem 1rem;
-    margin: 0.4rem 0; font-size: 0.83rem; color: #1E293B;
+.rule-card-active {
+    background: #F0FDF4;
+    border: 1px solid #BBF7D0;
+    border-left: 4px solid #16A34A;
+    border-radius: 12px;
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 0.6rem;
 }
-.rule-off {
-    background: #F8FAFC; border: 1px solid #E2E8F0;
-    border-left: 4px solid #E2E8F0;
-    border-radius: 10px; padding: 0.6rem 1rem;
-    margin: 0.3rem 0; font-size: 0.78rem; color: #94A3B8;
+.rule-card-silent {
+    background: #F8FAFC;
+    border: 1px solid var(--border);
+    border-left: 4px solid #CBD5E1;
+    border-radius: 10px;
+    padding: 0.7rem 1rem;
+    margin-bottom: 0.45rem;
+    font-size: 0.8rem;
+    color: var(--text-light);
 }
-.badge-green {
-    background: #DCFCE7; color: #15803D;
-    padding: 0.1rem 0.5rem; border-radius: 6px;
-    font-size: 0.73rem; font-weight: 700; margin-right: 0.3rem;
+.rule-title {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #14532D;
+    margin-bottom: 0.5rem;
 }
-.badge-blue {
-    background: #DBEAFE; color: #1D4ED8;
-    padding: 0.1rem 0.5rem; border-radius: 6px;
-    font-size: 0.73rem; font-weight: 700; margin-right: 0.3rem;
+.rule-badges-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
 }
-.badge-amber {
-    background: #FEF3C7; color: #B45309;
-    padding: 0.1rem 0.5rem; border-radius: 6px;
-    font-size: 0.73rem; font-weight: 700;
+.r-chip {
+    padding: 0.2rem 0.55rem;
+    border-radius: 6px;
+    font-size: 0.73rem;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+}
+.r-chip-omega { background: #DCFCE7; color: #15803D; }
+.r-chip-z { background: #DBEAFE; color: #1D4ED8; }
+.r-chip-contrib { background: #FEF3C7; color: #B45309; }
+
+/* ── MATH FORMULA BOX ── */
+.math-box {
+    background: #0F172A;
+    color: #F8FAFC;
+    border-radius: 14px;
+    padding: 1.4rem;
+    margin: 1.2rem 0;
+    font-family: 'JetBrains Mono', monospace;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* ── MU BARS ── */
-.mu-row { display: flex; align-items: center; gap: 0.5rem; margin: 0.3rem 0; }
-.mu-lbl { font-size: 0.75rem; color: #64748B; width: 72px; flex-shrink: 0; font-weight: 500; text-transform: capitalize; }
-.mu-bg  { flex: 1; background: #E2E8F0; border-radius: 999px; height: 6px; overflow: hidden; }
-.mu-fg  { height: 100%; border-radius: 999px; background: linear-gradient(90deg,#4F46E5,#7C3AED); }
-.mu-val { font-size: 0.72rem; font-weight: 700; color: #4F46E5; width: 36px; text-align: right; flex-shrink: 0; }
+/* ── HISTORY CARDS ── */
+.history-card {
+    background: #FFFFFF;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.1rem;
+    text-align: center;
+    box-shadow: 0 2px 8px -2px rgba(15, 23, 42, 0.04);
+}
+.hist-score-tag {
+    font-size: 2.4rem;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -0.03em;
+}
+.hist-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0.35rem 0 0.5rem 0;
+}
+.hist-specs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.3rem;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    border-top: 1px solid var(--border-subtle);
+    padding-top: 0.5rem;
+}
 
-/* ── TIPS ── */
-.tip {
-    display: flex; align-items: flex-start; gap: 0.7rem;
-    background: #F8FAFC; border: 1px solid #E2E8F0;
-    border-radius: 10px; padding: 0.7rem 1rem;
-    margin: 0.35rem 0; font-size: 0.85rem; color: #374151; line-height: 1.4;
+/* ── STREAMLIT WIDGET OVERRIDES ── */
+div[data-testid="stSlider"] label {
+    font-size: 0.88rem !important;
+    font-weight: 700 !important;
+    color: #1E293B !important;
 }
-.tip-dot { width: 7px; height: 7px; border-radius: 50%; background: #4F46E5; flex-shrink: 0; margin-top: 0.38rem; }
-
-/* ── SNAPSHOT ── */
-.snapshot {
-    background: #F8FAFC; border: 1px solid #E2E8F0;
-    border-radius: 12px; padding: 1rem 1.2rem; margin-top: 1rem;
+.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%) !important;
+    color: #FFFFFF !important;
+    border: none !important;
+    border-radius: 14px !important;
+    padding: 0.85rem 1.8rem !important;
+    font-size: 0.95rem !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.04em !important;
+    box-shadow: 0 8px 24px -4px rgba(79, 70, 229, 0.4) !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
-.snap-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 1rem; }
-.snap-row { display: flex; justify-content: space-between; font-size: 0.8rem; }
-.snap-key { color: #94A3B8; font-weight: 500; }
-.snap-val { font-weight: 700; }
-
-/* ── HISTORY ── */
-.hist-card {
-    background: white; border: 1px solid #E2E8F0;
-    border-radius: 14px; padding: 1rem; text-align: center;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+.stButton > button[kind="primary"]:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 12px 30px -4px rgba(79, 70, 229, 0.55) !important;
 }
-.hist-score { font-size: 2.2rem; font-weight: 900; line-height: 1; }
-.hist-type  { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin: 0.2rem 0; }
-.hist-meta  { font-size: 0.68rem; color: #94A3B8; }
-
-/* ── PLACEHOLDER ── */
-.placeholder {
-    background: white; border: 2px dashed #E2E8F0;
-    border-radius: 20px; padding: 3.5rem 2rem;
-    text-align: center; height: 100%;
+.stButton > button[kind="secondary"] {
+    border-radius: 10px !important;
+    font-weight: 600 !important;
+    font-size: 0.8rem !important;
+    border: 1px solid var(--border) !important;
+    background: #FFFFFF !important;
 }
-.ph-icon {
-    width: 72px; height: 72px;
-    background: linear-gradient(135deg, #EEF2FF, #E0E7FF);
-    border-radius: 18px; margin: 0 auto 1.2rem auto;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 1.8rem; border: 1px solid #C7D2FE;
+.stButton > button[kind="secondary"]:hover {
+    border-color: #4F46E5 !important;
+    color: #4F46E5 !important;
 }
-.ph-title { font-size: 1.3rem; font-weight: 700; color: #1E293B; margin-bottom: 0.4rem; }
-.ph-sub   { font-size: 0.85rem; color: #94A3B8; line-height: 1.7; }
-
-/* ── ABOUT CARDS ── */
-.about-box {
-    background: #F8FAFC; border: 1px solid #E2E8F0;
-    border-radius: 14px; padding: 1.5rem; height: 100%;
-}
-.about-box h4 {
-    font-size: 0.78rem; font-weight: 700; color: #4F46E5;
-    text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.8rem;
-}
-.about-box p, .about-box li { font-size: 0.83rem; color: #374151; line-height: 1.8; }
 
 /* ── FOOTER ── */
-.footer {
-    text-align: center; padding: 2rem 0 1rem;
-    border-top: 1px solid #E2E8F0; margin-top: 3rem;
-    font-size: 0.78rem; color: #94A3B8;
+.app-footer {
+    text-align: center;
+    padding: 2.8rem 1rem 1.2rem 1rem;
+    border-top: 1px solid var(--border);
+    margin-top: 3.5rem;
+    color: var(--text-light);
+    font-size: 0.82rem;
+    line-height: 1.8;
 }
-.footer strong { color: #4F46E5; font-weight: 700; font-size: 0.9rem; }
-
-/* ── DIVIDER ── */
-.divider { height: 1px; background: #E2E8F0; margin: 2rem 0; }
+.app-footer a {
+    color: #4F46E5;
+    text-decoration: none;
+    font-weight: 600;
+}
+.app-footer a:hover {
+    text-decoration: underline;
+}
 </style>
 """, unsafe_allow_html=True)
 
-# ── SESSION STATE ───────────────────────────────────────
+
+# ── SESSION STATE INITIALIZATION ───────────────────────────────────────────────
 if 'history' not in st.session_state:
     st.session_state.history = []
 if 'engine' not in st.session_state:
     st.session_state.engine, st.session_state.variables = build_fitfuzzy_engine()
 
+# Slider state keys
+if 'input_sleep' not in st.session_state:
+    st.session_state.input_sleep = 7.0
+if 'input_soreness' not in st.session_state:
+    st.session_state.input_soreness = 3.0
+if 'input_stress' not in st.session_state:
+    st.session_state.input_stress = 3.5
+if 'input_time' not in st.session_state:
+    st.session_state.input_time = 60
+if 'input_rest_days' not in st.session_state:
+    st.session_state.input_rest_days = 2
+if 'input_goal' not in st.session_state:
+    st.session_state.input_goal = "Maintenance"
+
 engine    = st.session_state.engine
 variables = st.session_state.variables
 
-# ── NAVBAR ─────────────────────────────────────────────
-st.markdown("""
-<div class="navbar">
-    <div>
-        <div class="nav-logo">FitFuzzy</div>
-        <div class="nav-sub">Fuzzy Logic Workout Intelligence</div>
-    </div>
-    <div class="nav-pill">Sugeno FIS v1.0</div>
-</div>
-""", unsafe_allow_html=True)
 
-# ── HERO ───────────────────────────────────────────────
+# ── NAVBAR ─────────────────────────────────────────────────────────────────────
 st.markdown("""
-<div class="hero">
-    <h1>Train Smarter,<br/>Not Harder.</h1>
-    <p>FitFuzzy analyses your sleep, stress, soreness and time using
-    a Sugeno fuzzy inference system with 12 expert rules to recommend
-    the exact workout intensity your body needs today.</p>
-    <div class="hero-stats">
-        <div><div class="hs-num">12</div><div class="hs-lbl">Expert Rules</div></div>
-        <div><div class="hs-num">5</div><div class="hs-lbl">Input Variables</div></div>
-        <div><div class="hs-num">6</div><div class="hs-lbl">Intensity Levels</div></div>
-        <div><div class="hs-num">100%</div><div class="hs-lbl">Explainable AI</div></div>
+<div class="navbar-container">
+    <div class="brand-group">
+        <div class="brand-icon-box">⚡</div>
+        <div>
+            <div class="brand-title">FITFUZZY AI</div>
+            <div class="brand-subtitle">Sugeno Fuzzy Inference Engine</div>
+        </div>
+    </div>
+    <div class="nav-badges">
+        <span class="badge-pill badge-pill-emerald">● System Online</span>
+        <span class="badge-pill badge-pill-purple">Sugeno FIS v2.0</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-# ── LAYOUT ─────────────────────────────────────────────
-left, right = st.columns([1, 1.3], gap="large")
 
-# ── LEFT ───────────────────────────────────────────────
-with left:
-    st.markdown('<div class="sec-label">Daily Check-In</div>', unsafe_allow_html=True)
+# ── HERO BANNER ────────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="hero-card">
+    <div class="hero-badge">🧬 Explainable Artificial Intelligence • Sports Physiology</div>
+    <div class="hero-title">Precision Workout Prescriptions,<br/>Backed by Mathematical Rigor.</div>
+    <div class="hero-desc">
+        FitFuzzy transforms physiological fatigue signals, systemic stress markers, and schedule constraints
+        into optimal workout intensities using a custom Sugeno Fuzzy Logic inference architecture — 
+        with 100% white-box mathematical transparency.
+    </div>
+    <div class="hero-stats-grid">
+        <div>
+            <div class="h-stat-num">12</div>
+            <div class="h-stat-label">Sugeno Rules</div>
+        </div>
+        <div>
+            <div class="h-stat-num">5</div>
+            <div class="h-stat-label">Physio Inputs</div>
+        </div>
+        <div>
+            <div class="h-stat-num">6</div>
+            <div class="h-stat-label">Prescription Tiers</div>
+        </div>
+        <div>
+            <div class="h-stat-num">100%</div>
+            <div class="h-stat-label">Explainable (XAI)</div>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
-    sleep_val    = st.slider("Sleep Quality  (0 = terrible, 10 = perfect)",           0.0, 10.0, 7.0, 0.5)
-    soreness_val = st.slider("Muscle Soreness  (0 = fresh, 10 = can barely move)",    0.0, 10.0, 3.0, 0.5)
-    stress_val   = st.slider("Stress Level  (0 = calm, 10 = overwhelmed)",            0.0, 10.0, 4.0, 0.5)
-    time_val     = st.slider("Available Time  (minutes)",                              10,  120,  60,  5)
-    rest_val     = st.slider("Days Since Last Rest Day",                               0,   10,   2,   1)
-    goal         = st.selectbox("Current Training Goal",
-                                ["Bulking","Cutting","Maintenance","Body Recomposition"])
-    st.markdown("<br/>", unsafe_allow_html=True)
-    btn = st.button("ANALYSE AND RECOMMEND", use_container_width=True, type="primary")
+
+# ── PRESET SCENARIOS BAR ───────────────────────────────────────────────────────
+st.markdown('<div class="preset-bar-title">⚡ Quick Athletic Scenarios (One-Click Presets)</div>', unsafe_allow_html=True)
+p1, p2, p3, p4, p5 = st.columns(5)
+
+with p1:
+    if st.button("🔥 Peak Readiness", use_container_width=True, help="High sleep, low soreness & stress, 90 min time"):
+        st.session_state.input_sleep = 9.0
+        st.session_state.input_soreness = 1.0
+        st.session_state.input_stress = 2.0
+        st.session_state.input_time = 90
+        st.session_state.input_rest_days = 2
+        st.session_state.input_goal = "Bulking"
+        st.rerun()
+
+with p2:
+    if st.button("🛌 Heavy Fatigue / DOMS", use_container_width=True, help="Low sleep, high muscle soreness, overdue rest"):
+        st.session_state.input_sleep = 4.0
+        st.session_state.input_soreness = 8.5
+        st.session_state.input_stress = 5.0
+        st.session_state.input_time = 45
+        st.session_state.input_rest_days = 1
+        st.session_state.input_goal = "Maintenance"
+        st.rerun()
+
+with p3:
+    if st.button("🧠 Stress Overdrive", use_container_width=True, help="Very high systemic stress, average sleep"):
+        st.session_state.input_sleep = 5.0
+        st.session_state.input_soreness = 3.5
+        st.session_state.input_stress = 8.5
+        st.session_state.input_time = 35
+        st.session_state.input_rest_days = 2
+        st.session_state.input_goal = "Cutting"
+        st.rerun()
+
+with p4:
+    if st.button("⏱️ 25m Time-Crunch", use_container_width=True, help="Short training window, moderate recovery"):
+        st.session_state.input_sleep = 7.0
+        st.session_state.input_soreness = 3.5
+        st.session_state.input_stress = 3.0
+        st.session_state.input_time = 25
+        st.session_state.input_rest_days = 2
+        st.session_state.input_goal = "Body Recomposition"
+        st.rerun()
+
+with p5:
+    if st.button("🎯 Baseline Routine", use_container_width=True, help="Balanced baseline: 7h sleep, moderate stress"):
+        st.session_state.input_sleep = 7.0
+        st.session_state.input_soreness = 3.0
+        st.session_state.input_stress = 3.5
+        st.session_state.input_time = 60
+        st.session_state.input_rest_days = 2
+        st.session_state.input_goal = "Maintenance"
+        st.rerun()
+
+st.markdown("<div style='height:0.8rem;'></div>", unsafe_allow_html=True)
+
+
+# ── CORE 2-COLUMN WORKSPACE ────────────────────────────────────────────────────
+col_inputs, col_results = st.columns([1, 1.25], gap="large")
+
+# ══════════════════════════════════════════════════════════════════════════════
+# LEFT COLUMN: INPUT CONTROLS
+# ══════════════════════════════════════════════════════════════════════════════
+with col_inputs:
+    # ── CARD 1: BIOLOGICAL READINESS ──
+    st.markdown("""
+    <div class="app-card">
+        <div class="card-header-group">
+            <h3 class="card-heading">🧬 Biological Recovery Markers</h3>
+            <span class="card-tag">Physiological Inputs</span>
+        </div>
+    """, unsafe_allow_html=True)
+
+    sleep_val = st.slider(
+        "Sleep Quality & Duration (0 = Insomnia, 10 = Restorative)",
+        min_value=0.0,
+        max_value=10.0,
+        value=float(st.session_state.input_sleep),
+        step=0.5,
+        help="Biological restoration index based on REM & deep sleep duration and perceived awakening freshness."
+    )
+    st.session_state.input_sleep = sleep_val
+
+    # Dynamic sleep badge
+    if sleep_val < 3.5:
+        sleep_badge = ("🔴 Deficit / Sleep Deprivation", "#EF4444")
+    elif sleep_val < 6.5:
+        sleep_badge = ("🟡 Baseline / Average Rest", "#F59E0B")
+    else:
+        sleep_badge = ("🟢 Optimal Restorative Recovery", "#10B981")
 
     st.markdown(f"""
-    <div class="snapshot">
-        <div class="sec-label" style="margin-bottom:0.5rem;">Current Snapshot</div>
-        <div class="snap-grid">
-            <div class="snap-row"><span class="snap-key">Sleep</span>
-                <span class="snap-val" style="color:#4F46E5;">{sleep_val}/10</span></div>
-            <div class="snap-row"><span class="snap-key">Soreness</span>
-                <span class="snap-val" style="color:#F59E0B;">{soreness_val}/10</span></div>
-            <div class="snap-row"><span class="snap-key">Stress</span>
-                <span class="snap-val" style="color:#EF4444;">{stress_val}/10</span></div>
-            <div class="snap-row"><span class="snap-key">Time</span>
-                <span class="snap-val" style="color:#10B981;">{time_val} min</span></div>
-            <div class="snap-row"><span class="snap-key">Rest</span>
-                <span class="snap-val" style="color:#8B5CF6;">{rest_val}d ago</span></div>
-            <div class="snap-row"><span class="snap-key">Goal</span>
-                <span class="snap-val" style="color:#0EA5E9;">{goal[:8]}</span></div>
+    <div style="font-size:0.75rem;font-weight:700;color:{sleep_badge[1]};margin-top:-0.4rem;margin-bottom:0.9rem;">
+        {sleep_badge[0]} ({sleep_val}/10)
+    </div>
+    """, unsafe_allow_html=True)
+
+    soreness_val = st.slider(
+        "Delayed-Onset Muscle Soreness - DOMS (0 = Fresh, 10 = Severe Soreness)",
+        min_value=0.0,
+        max_value=10.0,
+        value=float(st.session_state.input_soreness),
+        step=0.5,
+        help="Subjective assessment of muscular inflammation, localized tenderness, and movement restriction."
+    )
+    st.session_state.input_soreness = soreness_val
+
+    if soreness_val < 3.0:
+        sore_badge = ("🟢 Fully Primed / Minimal DOMS", "#10B981")
+    elif soreness_val < 6.5:
+        sore_badge = ("🟡 Moderate Muscle Fatigue", "#F59E0B")
+    else:
+        sore_badge = ("🔴 Severe Trauma / High Inflammation", "#EF4444")
+
+    st.markdown(f"""
+    <div style="font-size:0.75rem;font-weight:700;color:{sore_badge[1]};margin-top:-0.4rem;margin-bottom:0.2rem;">
+        {sore_badge[0]} ({soreness_val}/10)
+    </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── CARD 2: MENTAL & SCHEDULE CAPACITY ──
+    st.markdown("""
+    <div class="app-card">
+        <div class="card-header-group">
+            <h3 class="card-heading">⏱️ Cognitive & Schedule Bandwidth</h3>
+            <span class="card-tag">Temporal & CNS</span>
+        </div>
+    """, unsafe_allow_html=True)
+
+    stress_val = st.slider(
+        "Systemic Stress & Allostatic Load (0 = Zen, 10 = Overwhelmed)",
+        min_value=0.0,
+        max_value=10.0,
+        value=float(st.session_state.input_stress),
+        step=0.5,
+        help="Non-training systemic stress including work demands, mental fatigue, and autonomic nervous system strain."
+    )
+    st.session_state.input_stress = stress_val
+
+    time_val = st.slider(
+        "Available Training Window (minutes)",
+        min_value=10,
+        max_value=120,
+        value=int(st.session_state.input_time),
+        step=5,
+        help="Total dedicated time for warm-up, working volume, and post-session cooldown."
+    )
+    st.session_state.input_time = time_val
+
+    rest_val = st.slider(
+        "Days Elapsed Since Last Full Rest Day",
+        min_value=0,
+        max_value=10,
+        value=int(st.session_state.input_rest_days),
+        step=1,
+        help="Consecutive training accumulation without a full physiological off-day."
+    )
+    st.session_state.input_rest_days = rest_val
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ── CARD 3: STRATEGIC TARGETS ──
+    st.markdown("""
+    <div class="app-card">
+        <div class="card-header-group">
+            <h3 class="card-heading">🎯 Strategy & Context</h3>
+            <span class="card-tag">Periodization</span>
+        </div>
+    """, unsafe_allow_html=True)
+
+    goal_options = ["Maintenance", "Bulking", "Cutting", "Body Recomposition"]
+    default_idx = goal_options.index(st.session_state.input_goal) if st.session_state.input_goal in goal_options else 0
+    goal = st.selectbox(
+        "Current Periodization Objective",
+        goal_options,
+        index=default_idx
+    )
+    st.session_state.input_goal = goal
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ── ACTION BUTTON ──
+    analyze_click = st.button("⚡ GENERATE WORKOUT PRESCRIPTION", type="primary", use_container_width=True)
+
+    # ── REALTIME HUD MATRIX ──
+    st.markdown(f"""
+    <div class="app-card" style="padding:1.2rem;background:#F8FAFC;">
+        <div style="font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.6rem;">
+            📊 Live Assessment Telemetry
+        </div>
+        <div class="hud-grid">
+            <div class="hud-item">
+                <div class="hud-val" style="color:#4F46E5;">{sleep_val}</div>
+                <div class="hud-lbl">Sleep Quality</div>
+            </div>
+            <div class="hud-item">
+                <div class="hud-val" style="color:#F59E0B;">{soreness_val}</div>
+                <div class="hud-lbl">Muscle Soreness</div>
+            </div>
+            <div class="hud-item">
+                <div class="hud-val" style="color:#EF4444;">{stress_val}</div>
+                <div class="hud-lbl">Systemic Stress</div>
+            </div>
+            <div class="hud-item">
+                <div class="hud-val" style="color:#10B981;">{time_val}m</div>
+                <div class="hud-lbl">Available Time</div>
+            </div>
+            <div class="hud-item">
+                <div class="hud-val" style="color:#8B5CF6;">{rest_val}d</div>
+                <div class="hud-lbl">Days Since Rest</div>
+            </div>
+            <div class="hud-item">
+                <div class="hud-val" style="color:#0EA5E9;font-size:0.9rem;text-transform:uppercase;">{goal[:7]}</div>
+                <div class="hud-lbl">Active Goal</div>
+            </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-# ── RIGHT ──────────────────────────────────────────────
-with right:
-    if btn:
-        crisp = {'sleep':sleep_val,'soreness':soreness_val,
-                 'stress':stress_val,'time':time_val,'rest_days':rest_val}
-        fuzz  = {k: v.fuzzify(crisp[k]) for k, v in variables.items()}
-        score, rules = engine.predict(crisp, fuzz)
-        wtype, icon, desc, dur, tips = interpret_intensity(score)
-        color = get_intensity_color(score)
 
-        st.session_state.history.insert(0,{
-            'time':datetime.now().strftime("%H:%M"),
-            'type':wtype,'score':score,'color':color,
-            'sleep':sleep_val,'soreness':soreness_val,
-            'stress':stress_val,'time_val':time_val,'goal':goal
+# ══════════════════════════════════════════════════════════════════════════════
+# RIGHT COLUMN: INFERENCE ENGINE & PRESCRIPTION DASHBOARD
+# ══════════════════════════════════════════════════════════════════════════════
+with col_results:
+    # Always evaluate live so changes immediately produce crisp results
+    crisp = {
+        'sleep': sleep_val,
+        'soreness': soreness_val,
+        'stress': stress_val,
+        'time': time_val,
+        'rest_days': rest_val
+    }
+    fuzz = {k: v.fuzzify(crisp[k]) for k, v in variables.items()}
+    score, rules = engine.predict(crisp, fuzz)
+    wtype, icon, desc, dur, tips = interpret_intensity(score)
+    color = get_intensity_color(score)
+    rpe = get_rpe_target(score)
+    hr_zone = get_hr_zone(score)
+
+    fired   = [r for r in rules if r['fired']]
+    unfired = [r for r in rules if not r['fired']]
+
+    # Record in history if button was clicked
+    if analyze_click:
+        st.session_state.history.insert(0, {
+            'time': datetime.now().strftime("%H:%M:%S"),
+            'type': wtype,
+            'icon': icon,
+            'score': score,
+            'color': color,
+            'sleep': sleep_val,
+            'soreness': soreness_val,
+            'stress': stress_val,
+            'time_val': time_val,
+            'rest_days': rest_val,
+            'goal': goal
         })
-        st.session_state.history = st.session_state.history[:8]
+        st.session_state.history = st.session_state.history[:6]
 
-        fired   = [r for r in rules if r['fired']]
-        unfired = [r for r in rules if not r['fired']]
+    # ── RESULT HERO CARD ──
+    st.markdown(f"""
+    <div class="result-box" style="border-top: 5px solid {color};">
+        <span class="result-top-badge" style="background:{color}18;color:{color};border:1px solid {color}40;">
+            {icon} Daily Prescription Tiers
+        </span>
+        <div class="score-circle-container" style="background: radial-gradient(circle, {color}15 0%, rgba(255,255,255,0) 70%); border: 3px solid {color};">
+            <div class="score-number" style="color:{color};">{score:.0f}</div>
+            <div class="score-denominator">/ 100 Index</div>
+        </div>
+        <div class="rec-title" style="color:{color};">
+            {wtype}
+        </div>
+        <div class="rec-desc">
+            {desc}
+        </div>
+        <div class="gauge-track">
+            <div class="gauge-fill" style="width: {min(100, max(5, score))}%; background: linear-gradient(90deg, #4F46E5 0%, {color} 100%);"></div>
+        </div>
+        <div class="gauge-markers">
+            <span>Rest (0)</span>
+            <span>Recovery (28)</span>
+            <span>Light (42)</span>
+            <span>Moderate (58)</span>
+            <span>Solid (74)</span>
+            <span>Heavy (84+)</span>
+        </div>
+        <div class="metrics-4-grid">
+            <div class="m4-card">
+                <div class="m4-title">⏱️ Session Duration</div>
+                <div class="m4-value" style="color:{color};">{dur}</div>
+            </div>
+            <div class="m4-card">
+                <div class="m4-title">⚡ Perceived Exertion</div>
+                <div class="m4-value">{rpe.split('(')[0].strip()}</div>
+            </div>
+            <div class="m4-card">
+                <div class="m4-title">🎯 Target HR Zone</div>
+                <div class="m4-value">{hr_zone.split(':')[0]}</div>
+            </div>
+            <div class="m4-card">
+                <div class="m4-title">⚙️ Active Inference</div>
+                <div class="m4-value">{len(fired)} of 12 Rules</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-        # RESULT CARD
+    # ── ACTIONABLE TACTICAL DIRECTIVES ──
+    st.markdown("""
+    <div class="directives-card">
+        <div style="font-size:0.75rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.8rem;">
+            📋 Tactical Directives & Session Rules
+        </div>
+    """, unsafe_allow_html=True)
+
+    for i, tip in enumerate(tips, 1):
         st.markdown(f"""
-        <div class="result-hero">
-            <div class="sec-label" style="margin-bottom:0.6rem;">Today's Recommendation</div>
-            <div class="big-score" style="color:{color};">
-                {score:.0f}<span class="score-denom">/100</span>
-            </div>
-            <div class="workout-name" style="color:{color};">{wtype}</div>
-            <div class="workout-desc">{desc}</div>
-            <div class="duration-badge"
-                 style="color:{color};border-color:{color};background:{color}15;">
-                Recommended: {dur}
-            </div>
-            <div class="gauge-wrap">
-                <div class="gauge-labels">
-                    <span>Rest</span><span>Recovery</span><span>Light</span>
-                    <span>Moderate</span><span>Solid</span><span>Heavy</span>
+        <div class="directive-row">
+            <div class="directive-icon">{i}</div>
+            <div>{tip}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ── EXPORT / SHARE BAR ──
+    protocol_text = f"""FITFUZZY WORKOUT PRESCRIPTION
+Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+Intensity Index: {score:.1f}/100 ({wtype})
+Target Duration: {dur}
+RPE Guidance: {rpe}
+Cardio Zone: {hr_zone}
+Directives:
+""" + "\n".join([f"- {t}" for t in tips])
+
+    st.download_button(
+        label="📥 Download Daily Prescription (TXT)",
+        data=protocol_text,
+        file_name=f"fitfuzzy_prescription_{datetime.now().strftime('%Y%m%d')}.txt",
+        mime="text/plain",
+        use_container_width=True
+    )
+
+
+# ── FULL-WIDTH DEEP DIVE TABS (EXPLAINABLE AI) ─────────────────────────────────
+st.markdown("<div style='height:1.5rem;'></div>", unsafe_allow_html=True)
+st.markdown('<div class="preset-bar-title">🔬 Deep-Dive Architecture & Explainable AI (XAI)</div>', unsafe_allow_html=True)
+
+tab_fuzz, tab_rules, tab_math, tab_hist, tab_science = st.tabs([
+    "🧮 Fuzzification Membership (μ)",
+    "⚙️ Sugeno Rule Engine",
+    "📐 Mathematical Defuzzification",
+    "📈 Session Analytics & History",
+    "📚 Scientific Architecture"
+])
+
+# ── TAB 1: FUZZIFICATION ──
+with tab_fuzz:
+    st.markdown("""
+    <div style="font-size:0.85rem;color:var(--text-muted);margin-bottom:1.2rem;line-height:1.6;">
+        Fuzzification maps crisp biological numbers into degrees of membership (<strong>μ ∈ [0.0, 1.0]</strong>)
+        across standard Triangular and Trapezoidal membership functions defined for each variable.
+    </div>
+    """, unsafe_allow_html=True)
+
+    fcol1, fcol2 = st.columns(2, gap="medium")
+    vars_list = [
+        ('sleep', 'Sleep Quality', sleep_val, '/ 10', '#4F46E5'),
+        ('soreness', 'Muscle Soreness (DOMS)', soreness_val, '/ 10', '#F59E0B'),
+        ('stress', 'Systemic Stress', stress_val, '/ 10', '#EF4444'),
+        ('time', 'Available Time', time_val, 'min', '#10B981'),
+        ('rest_days', 'Days Since Rest Day', rest_val, 'days', '#8B5CF6')
+    ]
+
+    for idx, (v_key, v_title, v_crisp, v_unit, v_col) in enumerate(vars_list):
+        target_col = fcol1 if idx % 2 == 0 else fcol2
+        with target_col:
+            st.markdown(f"""
+            <div class="fuzzy-var-block">
+                <div class="fuzzy-var-header">
+                    <span>{v_title}</span>
+                    <span style="font-family:'JetBrains Mono';color:{v_col};">Input: {v_crisp} {v_unit}</span>
                 </div>
-                <div class="gauge-bg">
-                    <div class="gauge-fg"
-                         style="width:{score}%;
-                         background:linear-gradient(90deg,#4F46E5,{color});">
+            """, unsafe_allow_html=True)
+
+            active_mfs = fuzz[v_key]
+            for label_name, mu_val in active_mfs.items():
+                pct = int(mu_val * 100)
+                st.markdown(f"""
+                <div class="mf-row">
+                    <div class="mf-label">{label_name}</div>
+                    <div class="mf-track">
+                        <div class="mf-fill" style="width:{pct}%;background:{v_col};"></div>
+                    </div>
+                    <div class="mf-val" style="color:{v_col};">{mu_val:.3f}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+# ── TAB 2: RULES ──
+with tab_rules:
+    st.markdown(f"""
+    <div style="font-size:0.85rem;color:var(--text-muted);margin-bottom:1.2rem;">
+        Sugeno 0th-order and 1st-order expert rules. Firing strength <strong>ω</strong> is calculated using
+        <strong>Fuzzy AND = min(μ)</strong> and <strong>Fuzzy OR = max(μ)</strong>.
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown(f"#### Active Rules ({len(fired)} Fired)")
+    if fired:
+        for r in sorted(fired, key=lambda x: -x['omega']):
+            st.markdown(f"""
+            <div class="rule-card-active">
+                <div class="rule-title">⚡ {r['name']}</div>
+                <div class="rule-badges-group">
+                    <span class="r-chip r-chip-omega">Firing Strength (ω) = {r['omega']:.4f}</span>
+                    <span class="r-chip r-chip-z">Consequent (z) = {r['z_i']:.1f}</span>
+                    <span class="r-chip r-chip-contrib">Weighted Impact = {r['contribution']:.3f}</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.info("No expert rules fired with strength > 0.01 for this combination.")
+
+    if unfired:
+        with st.expander(f"Silent / Inactive Rules ({len(unfired)} Inactive)", expanded=False):
+            for r in unfired:
+                st.markdown(f"""
+                <div class="rule-card-silent">
+                    ⚪ {r['name']} <span style="float:right;font-family:'JetBrains Mono';">ω = {r['omega']:.4f}</span>
+                </div>
+                """, unsafe_allow_html=True)
+
+# ── TAB 3: MATHEMATICAL DEFUZZIFICATION ──
+with tab_math:
+    numerator_sum = sum(r['omega'] * r['z_i'] for r in rules)
+    denominator_sum = sum(r['omega'] for r in rules)
+
+    st.markdown("""
+    ### 📐 Sugeno Weighted Average Defuzzification
+    Unlike Mamdani systems that require continuous centroid integration over complex geometric polygons, 
+    the **Sugeno Fuzzy Model** computes the final crisp output via an exact weighted average:
+    """)
+
+    st.latex(r"Y = \frac{\sum_{i=1}^{N} \omega_i \cdot z_i}{\sum_{i=1}^{N} \omega_i}")
+
+    st.markdown(f"""
+    <div class="math-box">
+        <div><strong>Numerator (Weighted Sum of Singletons):</strong></div>
+        <div style="color:#A7F3D0;margin:0.4rem 0;">Σ (ω_i × z_i) = {numerator_sum:.4f}</div>
+        <br/>
+        <div><strong>Denominator (Sum of Firing Weights):</strong></div>
+        <div style="color:#A5B4FC;margin:0.4rem 0;">Σ ω_i = {denominator_sum:.4f}</div>
+        <br/>
+        <div><strong>Final Crisp Score:</strong></div>
+        <div style="color:#FDE047;font-size:1.15rem;margin-top:0.4rem;">
+            Y = {numerator_sum:.4f} / {denominator_sum:.4f} = <strong>{score:.2f}</strong>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ── TAB 4: SESSION ANALYTICS & HISTORY ──
+with tab_hist:
+    h_col1, h_col2 = st.columns([4, 1])
+    with h_col1:
+        st.markdown("### 📈 Recent Assessments Log")
+        st.markdown(f"Tracking **{len(st.session_state.history)}** assessments in current browser session.")
+    with h_col2:
+        if st.button("🗑️ Clear Log", use_container_width=True):
+            st.session_state.history = []
+            st.rerun()
+
+    if st.session_state.history:
+        hcols = st.columns(min(len(st.session_state.history), 4))
+        for h_idx, item in enumerate(st.session_state.history[:4]):
+            with hcols[h_idx]:
+                st.markdown(f"""
+                <div class="history-card" style="border-top: 4px solid {item['color']};">
+                    <div class="hist-score-tag" style="color:{item['color']};">{item['score']:.0f}</div>
+                    <div class="hist-label" style="color:{item['color']};">{item['icon']} {item['type']}</div>
+                    <div style="font-size:0.75rem;color:#94A3B8;margin-bottom:0.5rem;">{item['time']} • {item['goal']}</div>
+                    <div class="hist-specs">
+                        <span>💤 Sleep {item['sleep']}</span>
+                        <span>💥 Sore {item['soreness']}</span>
+                        <span>🧠 Stress {item['stress']}</span>
+                        <span>⏱️ {item['time_val']}m</span>
                     </div>
                 </div>
-            </div>
-            <div class="metrics-3">
-                <div class="metric">
-                    <div class="metric-n">{len(fired)}</div>
-                    <div class="metric-l">Rules Fired</div>
-                </div>
-                <div class="metric">
-                    <div class="metric-n" style="color:{color};">{score:.0f}</div>
-                    <div class="metric-l">Intensity</div>
-                </div>
-                <div class="metric">
-                    <div class="metric-n">{dur.split()[0]}</div>
-                    <div class="metric-l">Minutes</div>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # FUZZIFICATION
-        with st.expander("Fuzzification — How Inputs Were Converted to Membership Values"):
-            fc1, fc2 = st.columns(2)
-            for i,(vn,lbl,val,unit) in enumerate([
-                ('sleep','Sleep',sleep_val,'/ 10'),
-                ('soreness','Soreness',soreness_val,'/ 10'),
-                ('stress','Stress',stress_val,'/ 10'),
-                ('time','Time',time_val,'min'),
-                ('rest_days','Rest Days',rest_val,'days')]):
-                with (fc1 if i%2==0 else fc2):
-                    st.markdown(f'<div style="font-size:.85rem;font-weight:700;color:#374151;margin-bottom:.3rem;">{lbl} <span style="color:#94A3B8;font-weight:400;">= {val} {unit}</span></div>', unsafe_allow_html=True)
-                    active = {k:v for k,v in fuzz[vn].items() if v > 0.005}
-                    for lbl2,mu in sorted(active.items(),key=lambda x:-x[1]):
-                        bw=int(mu*100)
-                        st.markdown(f'<div class="mu-row"><div class="mu-lbl">{lbl2}</div><div class="mu-bg"><div class="mu-fg" style="width:{bw}%;"></div></div><div class="mu-val">{mu:.3f}</div></div>', unsafe_allow_html=True)
-                    st.markdown("<br/>", unsafe_allow_html=True)
-
-        # RULES
-        with st.expander(f"Inference Engine — {len(fired)} of {len(rules)} Rules Fired", expanded=True):
-            st.markdown(f'<div style="font-size:.78rem;color:#94A3B8;margin-bottom:.8rem;">AND = min(mu) &nbsp;|&nbsp; OR = max(mu) &nbsp;|&nbsp; Final = Sugeno weighted average</div>', unsafe_allow_html=True)
-            if fired:
-                for r in sorted(fired,key=lambda x:-x['omega']):
-                    st.markdown(f'<div class="rule-on"><div style="font-weight:700;color:#15803D;margin-bottom:.3rem;">{r["name"]}</div><span class="badge-green">omega = {r["omega"]:.4f}</span><span class="badge-blue">z = {r["z_i"]:.1f}</span><span class="badge-amber">contribution = {r["contribution"]:.3f}</span></div>', unsafe_allow_html=True)
-            if unfired:
-                st.markdown('<div style="font-size:.72rem;color:#94A3B8;margin:.7rem 0 .3rem;text-transform:uppercase;letter-spacing:.1em;font-weight:700;">Silent rules</div>', unsafe_allow_html=True)
-                for r in unfired:
-                    st.markdown(f'<div class="rule-off">{r["name"]}</div>', unsafe_allow_html=True)
-
-        # TIPS
-        with st.expander("Training Tips for Today", expanded=True):
-            for tip in tips:
-                st.markdown(f'<div class="tip"><div class="tip-dot"></div><span>{tip}</span></div>', unsafe_allow_html=True)
-
+                """, unsafe_allow_html=True)
     else:
-        st.markdown("""
-        <div class="placeholder">
-            <div class="ph-icon">F</div>
-            <div class="ph-title">Ready to Analyse</div>
-            <div class="ph-sub">
-                Set your daily inputs on the left and click<br/>
-                <strong style="color:#4F46E5;">ANALYSE AND RECOMMEND</strong><br/>
-                to get your personalised workout intensity.
-            </div>
-            <div style="margin-top:1.5rem;background:#EEF2FF;border:1px solid #C7D2FE;
-                border-radius:12px;padding:1rem 1.2rem;font-size:.8rem;
-                color:#4338CA;text-align:left;line-height:2.2;">
-                <strong>12</strong> fuzzy expert rules<br/>
-                <strong>Triangular</strong> + Trapezoidal MFs<br/>
-                <strong>Sugeno</strong> weighted average inference<br/>
-                <strong>Full</strong> rule-level explainability
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.info("No prior assessments logged yet. Adjust sliders and click 'Generate Workout Prescription' to start tracking.")
 
-# ── HISTORY ────────────────────────────────────────────
-if st.session_state.history:
-    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-    hc1, hc2 = st.columns([5,1])
-    with hc1:
-        st.markdown('<div class="sec-label">Session History</div>', unsafe_allow_html=True)
-        st.markdown('<div style="font-size:.83rem;color:#94A3B8;margin-bottom:1rem;">Your recommendations from this session</div>', unsafe_allow_html=True)
-    with hc2:
-        if st.button("Clear"):
-            st.session_state.history=[]
-            st.rerun()
-    cols = st.columns(min(len(st.session_state.history),4))
-    for i,e in enumerate(st.session_state.history[:4]):
-        c=e.get('color','#4F46E5')
-        with cols[i]:
-            st.markdown(f'<div class="hist-card" style="border-top:4px solid {c};"><div class="hist-score" style="color:{c};">{e["score"]:.0f}</div><div class="hist-type" style="color:{c};">{e["type"]}</div><div class="hist-meta">{e["time"]} | {e["goal"][:6]}</div><div style="margin-top:.5rem;display:grid;grid-template-columns:1fr 1fr;gap:.2rem;font-size:.68rem;color:#94A3B8;"><span>Sleep {e["sleep"]}</span><span>Sore {e["soreness"]}</span><span>Stress {e["stress"]}</span><span>{e["time_val"]}min</span></div></div>', unsafe_allow_html=True)
+# ── TAB 5: SCIENTIFIC ARCHITECTURE ──
+with tab_science:
+    st.markdown("""
+    ### 🔬 Why Fuzzy Inference Over Black-Box Machine Learning?
+    
+    1. **Safety & Explainability:** In exercise physiology, recommendations must be transparent. If an athlete is prescribed Complete Rest, they can trace exactly which rule triggered it (e.g. `High Soreness + High Systemic Stress`).
+    2. **Graceful Degradation:** Real human biology does not operate on crisp binary thresholds. Moving from 6.9 hours to 7.1 hours of sleep changes membership degrees continuously without jarring discontinuity.
+    3. **Zero Cold-Start / Training Bias:** No multi-gigabyte neural network training or hallucination risks. The system embodies proven sports science and periodization rules directly.
+    
+    ---
+    
+    #### Linguistic Universe of Discourse:
+    - **Sleep Quality (0 - 10):** Poor [0, 4.5] | Average [3.0, 7.0] | Good [6.0, 10.0]
+    - **Muscle Soreness (0 - 10):** Low [0, 4.0] | Moderate [2.5, 7.5] | High [6.0, 10.0]
+    - **Systemic Stress (0 - 10):** Low [0, 4.5] | Moderate [3.0, 7.0] | High [6.0, 10.0]
+    - **Available Time (0 - 120 min):** Short [0, 35m] | Moderate [25, 65m] | Long [55, 120m]
+    - **Days Since Rest (0 - 10 days):** Fresh [0, 3d] | Moderate [2, 6d] | Overdue [5, 10d]
+    """)
 
-# ── ABOUT ──────────────────────────────────────────────
-st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-with st.expander("About FitFuzzy — Technical Architecture"):
-    a1,a2,a3 = st.columns(3)
-    with a1:
-        st.markdown("""
-        <div class="about-box">
-        <h4>Fuzzy Logic Pipeline</h4>
-        <p><strong>1. Fuzzification</strong><br/>
-        Crisp values converted to membership degrees (mu) using triangular and trapezoidal MFs.</p><br/>
-        <p><strong>2. Rule Evaluation</strong><br/>
-        12 IF-THEN rules: AND = min(mu), OR = max(mu).</p><br/>
-        <p><strong>3. Defuzzification</strong><br/>
-        Sugeno weighted average: Y = sum(omega x z) / sum(omega)</p>
-        </div>""", unsafe_allow_html=True)
-    with a2:
-        st.markdown("""
-        <div class="about-box">
-        <h4>Input Variables</h4>
-        <p>
-        Sleep Quality — poor / average / good<br/>
-        Muscle Soreness — low / moderate / high<br/>
-        Stress Level — low / moderate / high<br/>
-        Available Time — short / moderate / long<br/>
-        Days Since Rest — fresh / moderate / overdue
-        </p><br/>
-        <p>All MFs: Triangular + Trapezoidal shapes</p>
-        </div>""", unsafe_allow_html=True)
-    with a3:
-        st.markdown("""
-        <div class="about-box">
-        <h4>Intensity Scale</h4>
-        <p>
-        0 – 20 &nbsp; Complete Rest<br/>
-        21 – 40 &nbsp; Active Recovery<br/>
-        41 – 55 &nbsp; Light Cardio<br/>
-        56 – 70 &nbsp; Moderate Training<br/>
-        71 – 85 &nbsp; Solid Workout<br/>
-        86 – 100 &nbsp; Heavy Training
-        </p>
-        </div>""", unsafe_allow_html=True)
-
-# ── FOOTER ─────────────────────────────────────────────
+# ── FOOTER ─────────────────────────────────────────────────────────────────────
 st.markdown("""
-<div class="footer">
-    <strong>FitFuzzy</strong><br/>
-    Sugeno Fuzzy Inference System &nbsp;|&nbsp;
-    Python + Streamlit &nbsp;|&nbsp;
-    NIT Silchar, ECE 2027 &nbsp;|&nbsp;
-    Built from scratch — no ML libraries
+<div class="app-footer">
+    <strong>FitFuzzy AI — Explainable Workout Prescription System</strong><br/>
+    Sugeno 0th/1st-Order Fuzzy Inference System • Pure Python Engine (Zero ML Dependencies)<br/>
+    Crafted for National Institute of Technology (NIT) Silchar, Electronics & Communication Engineering (ECE 2027)<br/>
+    Open Source under MIT License • <a href="https://github.com/karankaushik012345/fitfuzzy" target="_blank">GitHub Repository</a>
 </div>
 """, unsafe_allow_html=True)
